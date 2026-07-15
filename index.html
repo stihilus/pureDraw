@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PURE.DRAW</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@300;400;700&family=IBM+Plex+Mono:wght@400;700&family=Inter:wght@100..900&family=Space+Grotesk:wght@300..700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="hrow top">
+      <div class="tab">PURE.DRAW</div>
+      <button class="menu-btn" id="mb-file">FILE</button>
+      <button class="menu-btn" id="mb-add">ADD</button>
+      <button class="menu-btn" id="mb-demos">DEMOS</button>
+      <button class="menu-btn" id="mb-manual">MANUAL</button>
+      <div class="spacer"></div>
+      <div class="view-seg">
+        <button class="view-btn" id="view-nodes" title="Editor only">NODES</button>
+        <button class="view-btn active" id="view-split" title="Split view">SPLIT</button>
+        <button class="view-btn" id="view-preview" title="Preview only">PREVIEW</button>
+      </div>
+      <button class="menu-btn" id="btn-zoomreset" title="Reset zoom (⌘0)">1:1</button>
+    </div>
+  </header>
+
+  <div id="dd-file" class="dropdown hidden">
+    <div class="dd-item" id="mi-new">NEW</div>
+    <div class="dd-item" id="mi-save">SAVE.PATCH</div>
+    <div class="dd-item" id="mi-load">LOAD.PATCH</div>
+    <div class="dd-sep"></div>
+    <div class="dd-item" id="mi-export">EXPORT.IMAGE</div>
+  </div>
+  <div id="dd-demos" class="dropdown dd-add hidden">
+    <div class="dd-item" id="mi-demo1"><span>01&nbsp;&nbsp;HELLO</span><span class="hint">rect · text · slider</span></div>
+    <div class="dd-item" id="mi-demo2"><span>02&nbsp;&nbsp;SINE.LOOP</span><span class="hint">until · counter · stamp</span></div>
+    <div class="dd-item" id="mi-demo3"><span>03&nbsp;&nbsp;MANDALA</span><span class="hint">rotate · stamp · trigger</span></div>
+    <div class="dd-item" id="mi-demo4"><span>04&nbsp;&nbsp;PATTERN</span><span class="hint">tile · mirror · blend</span></div>
+    <div class="dd-item" id="mi-demo5"><span>05&nbsp;&nbsp;IMAGE</span><span class="hint">image · blend difference</span></div>
+    <div class="dd-item" id="mi-demo6"><span>06&nbsp;&nbsp;ORGANIC</span><span class="hint">noise · ramp · send/receive</span></div>
+    <div class="dd-item" id="mi-demo7"><span>07&nbsp;&nbsp;CLOCK</span><span class="hint">time · hsl · gradient · clip</span></div>
+    <div class="dd-item" id="mi-demo8"><span>08&nbsp;&nbsp;POSTER</span><span class="hint">generative swiss · random</span></div>
+    <div class="dd-item" id="mi-demo9"><span>09&nbsp;&nbsp;KALEIDOSCOPE</span><span class="hint">the full toolkit, live</span></div>
+    <div class="dd-item" id="mi-demo10"><span>10&nbsp;&nbsp;FLUX</span><span class="hint">logic · moses · duotone · riso</span></div>
+    <div class="dd-item" id="mi-demo11"><span>11&nbsp;&nbsp;FEEDBACK.TUNNEL</span><span class="hint">feedback · rotate · scale</span></div>
+    <div class="dd-item" id="mi-demo12"><span>12&nbsp;&nbsp;RISO.MIRROR</span><span class="hint">webcam · dither · duotone</span></div>
+  </div>
+  <input type="file" id="file-input" accept=".json,application/json" class="hidden">
+  <div id="dd-add" class="dropdown dd-add hidden">
+    <div class="add-tabs" id="add-tabs"></div>
+    <div class="add-list" id="add-list"></div>
+  </div>
+  <div id="ctx" class="dropdown hidden">
+    <div class="dd-item" id="ctx-help">HELP</div>
+  </div>
+  <div id="modal" class="hidden">
+    <div class="modal-box">
+      <div class="modal-head">
+        <span id="modal-title">HELP</span>
+        <button class="btn" id="modal-close">CLOSE</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+  <div id="manual" class="hidden">
+    <div class="manual-box">
+      <div class="modal-head">
+        <span>PURE.DRAW // MANUAL</span>
+        <button class="btn" id="manual-close">CLOSE</button>
+      </div>
+      <div class="manual-body">
+        <aside class="manual-nav" id="manual-nav"></aside>
+        <div class="manual-content" id="manual-content"></div>
+      </div>
+    </div>
+  </div>
+  <div id="save-modal" class="hidden">
+    <div class="modal-box save-box">
+      <div class="modal-head">
+        <span>SAVE.PATCH</span>
+        <button class="btn" id="save-cancel">CANCEL</button>
+      </div>
+      <div class="modal-body">
+        <label class="save-label" for="save-name">PATCH.NAME</label>
+        <div class="save-row">
+          <input type="text" id="save-name" class="save-input" spellcheck="false" autocomplete="off">
+          <span class="save-ext">.puredraw.json</span>
+        </div>
+        <button class="btn save-go" id="save-confirm">SAVE</button>
+      </div>
+    </div>
+  </div>
+
+  <main>
+    <section id="editor">
+      <div id="world">
+        <svg id="cables" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div id="nodes"></div>
+      </div>
+    </section>
+    <div id="splitter" title="Drag to resize"></div>
+    <section id="preview">
+      <div class="panel-head">
+        <span>PREVIEW//OUTPUT</span>
+        <span id="dims">—</span>
+      </div>
+      <div class="canvas-wrap">
+        <canvas id="preview-canvas" width="800" height="800"></canvas>
+        <div id="no-canvas" class="hidden">NO.CANVAS.NODE</div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>⌘Z:UNDO&nbsp;&nbsp;//&nbsp;&nbsp;⌘D:DUPLICATE&nbsp;&nbsp;//&nbsp;&nbsp;2-FINGER:PAN&nbsp;&nbsp;//&nbsp;&nbsp;PINCH/WHEEL:ZOOM&nbsp;&nbsp;//&nbsp;&nbsp;DEL:DELETE&nbsp;&nbsp;//&nbsp;&nbsp;DBLCLICK:EDIT</span>
+    <span id="status">RDY</span>
+  </footer>
+
+  <div id="tip" class="hidden"></div>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

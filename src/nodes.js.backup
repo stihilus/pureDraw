@@ -1,0 +1,1110 @@
+// node type definitions + text parsing
+// args: [name, type, default]  — every arg is also an inlet (typed value = fallback until a message arrives)
+
+// the bang message — PD-style: the literal word "bang"
+export const BANG = 'bang';
+
+export const TYPES = {
+  // gui / value nodes (one control inlet, one outlet) — they SEND messages
+  bng:     { gui: true, out: 'bang' },
+  number:  { gui: true, out: 'num' },
+  string:  { gui: true, out: 'str' },
+  toggle:  { gui: true, out: 'num' },
+  hslider: { gui: true, out: 'num', args: [['min','num',0], ['max','num',100]] },
+  vslider: { gui: true, out: 'num', args: [['min','num',0], ['max','num',100]] },
+
+  // control nodes — message in, message out
+  loadbang: { out: 'bang', loadbang: true },
+  metro:   { out: 'bang', metro: true, args: [['ms','num',500]] },
+  until:   { out: 'bang', until: true, args: [['n','num',10]] },
+  counter: { out: 'num',  counter: true, args: [['min','num',0], ['max','num',100], ['step','num',1]] },
+  random:  { out: 'num',  rand: true,  args: [['max','num',100]] },
+  sin:     { out: 'num',  fn: true },
+  cos:     { out: 'num',  fn: true },
+  '+':    { out: 'num',  math: true,  args: [['b','num',0]] },
+  '-':    { out: 'num',  math: true,  args: [['b','num',0]] },
+  '*':    { out: 'num',  math: true,  args: [['b','num',1]] },
+  '/':    { out: 'num',  math: true,  args: [['b','num',1]] },
+  '>':    { out: 'num',  compare: true, args: [['b','num',0]] },
+  '<':    { out: 'num',  compare: true, args: [['b','num',0]] },
+  '==':   { out: 'num',  compare: true, args: [['b','num',0]] },
+  '>=':   { out: 'num',  compare: true, args: [['b','num',0]] },
+  moses:  { out: 'multi', moses: true, args: [['thr','num',0]] },
+  map:    { out: 'num',  map: true, args: [['a','num',0],['b','num',100],['c','num',0],['d','num',800]] },
+  clamp:  { out: 'num',  clamp: true, args: [['a','num',0],['b','num',100]] },
+  change: { out: 'ctl',  change: true },
+  hsl:    { out: 'str',  hsl: true, args: [['h','num',0],['s','num',100],['l','num',50]] },
+  time:   { out: 'multi', time: true },
+  ramp:   { out: 'num',  ramp: true, args: [['ms','num',500]] },
+  noise:  { out: 'num',  noise: true, args: [['f','num',0.05]] },
+  t:      { out: 'multi', trigger: true },
+  sel:    { out: 'multi', sel: true },
+
+  // keyboard input + wireless connections
+  key:     { out: 'str', key: true },
+  send:    { out: null,  send: true },
+  receive: { out: 'ctl', recv: true },
+  spigot: { out: 'ctl',  spigot: true, args: [['open','num',0]] },
+  pipe:   { out: 'ctl',  pipe: true,   args: [['ms','num',500]] },
+  mouse:  { out: 'multi', mouse: true },
+
+  // draw nodes (outlet type: draw — a continuous signal, like ~ in PD)
+  bg:     { out: 'draw', args: [['color','col','#000000']] },
+  gradient: { out: 'draw', args: [['x1','num',0],['y1','num',0],['x2','num',800],['y2','num',800],['c1','col','#000000'],['c2','col','#ffffff']] },
+  rect:   { out: 'draw', args: [['x','num',400],['y','num',400],['w','num',200],['h','num',200],['fill','col','#000000'],['stroke','col','none'],['sw','num',0]] },
+  circle: { out: 'draw', args: [['x','num',400],['y','num',400],['r','num',100],['fill','col','#000000'],['stroke','col','none'],['sw','num',0]] },
+  line:   { out: 'draw', args: [['x1','num',100],['y1','num',100],['x2','num',700],['y2','num',700],['color','col','#000000'],['w','num',2]] },
+  text:   { out: 'draw', args: [['word','str','TEXT'],['x','num',400],['y','num',400],['size','num',48],['color','col','#000000'],['font','str','mono'],['weight','num',400],['align','str','center'],['track','num',0]] },
+
+  polygon: { out: 'draw', args: [['x','num',400],['y','num',400],['r','num',100],['n','num',6],['rot','num',0],['fill','col','#000000'],['stroke','col','none'],['sw','num',0]] },
+  ellipse: { out: 'draw', args: [['x','num',400],['y','num',400],['w','num',300],['h','num',200],['fill','col','#000000'],['stroke','col','none'],['sw','num',0]] },
+  image:   { out: 'draw', args: [['url','str',''],['x','num',400],['y','num',400],['w','num',300],['h','num',300]] },
+  webcam:  { out: 'draw', args: [['x','num',400],['y','num',400],['w','num',800],['h','num',600]] },
+
+  // the previous rendered frame as a draw source — trails, tunnels, video feedback
+  feedback: { out: 'draw', args: [['x','num',400],['y','num',400],['w','num',800],['h','num',800]] },
+
+  // stamps frozen copies of its draw input on every trig bang
+  stamp:  { out: 'draw', stamp: true, args: [['max','num',500]] },
+
+  // transforms: the draw signal passes through and everything inside is transformed
+  rotate:    { out: 'draw', xform: true, args: [['deg','num',0],['cx','num',400],['cy','num',400]] },
+  scale:     { out: 'draw', xform: true, args: [['s','num',1],['cx','num',400],['cy','num',400]] },
+  translate: { out: 'draw', xform: true, args: [['dx','num',0],['dy','num',0]] },
+  alpha:     { out: 'draw', xform: true, args: [['a','num',1]] },
+  blend:     { out: 'draw', xform: true, args: [['mode','str','multiply']] },
+  shadow:    { out: 'draw', xform: true, args: [['blur','num',20],['dx','num',0],['dy','num',10],['color','col','#000000']] },
+  tile:      { out: 'draw', xform: true, args: [['nx','num',3],['ny','num',3],['dx','num',100],['dy','num',100]] },
+  mirror:    { out: 'draw', xform: true, args: [['axis','str','x'],['pos','num',400]] },
+  dash:      { out: 'draw', xform: true, args: [['a','num',8],['b','num',8]] },
+  rectMode:  { out: 'draw', mode: true, args: [['mode','str','corner']] },
+  ellipseMode: { out: 'draw', mode: true, args: [['mode','str','corner']] },
+
+  // pixel effects: rasterise the incoming draw signal, then process its pixels
+  threshold: { out: 'draw', xform: true, pixel: true, args: [['level','num',128]] },
+  posterize: { out: 'draw', xform: true, pixel: true, args: [['levels','num',4]] },
+  dither:    { out: 'draw', xform: true, pixel: true, args: [['scale','num',2],['levels','num',2]] },
+  pixelate:  { out: 'draw', xform: true, pixel: true, args: [['size','num',8]] },
+  duotone:   { out: 'draw', xform: true, pixel: true, args: [['dark','col','#1a1a40'],['light','col','#ff5050']] },
+
+  // filter effects: composite the draw signal, then apply a canvas filter to it
+  blur:       { out: 'draw', xform: true, filter: true, args: [['radius','num',4]] },
+  invert:     { out: 'draw', xform: true, filter: true },
+  grayscale:  { out: 'draw', xform: true, filter: true },
+  contrast:   { out: 'draw', xform: true, filter: true, args: [['amount','num',1.5]] },
+  brightness: { out: 'draw', xform: true, filter: true, args: [['amount','num',1.3]] },
+  hue:        { out: 'draw', xform: true, filter: true, args: [['deg','num',90]] },
+
+  // clips its draw input to the silhouette of the mask input
+  clip:   { out: 'draw', clip: true },
+
+  // patch annotation — no ports, no output
+  comment: { comment: true, out: null },
+
+  // compositing layer: z = stacking order at the canvas (1 = bottom), count = inlets
+  layer:  { out: 'draw', layer: true, args: [['z','num',1], ['count','num',4]] },
+
+  // sink (like dac~)
+  canvas: { out: null, sink: true, args: [['w','num',800],['h','num',800]] },
+};
+
+const COLOR_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
+
+export function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
+
+// global variables usable in numeric fields — bound to the canvas size each frame.
+// w = canvas width, h = canvas height. Extend here to add more.
+export const VARS = { w: 800, h: 800 };
+
+// tiny safe expression evaluator: numbers, variables (w, h), + - * / % and ( ).
+// returns NaN on any parse error. Powers "w/2", "h/8", "w*0.25" in numeric fields.
+export function evalExpr(src, vars = VARS) {
+  const s = String(src);
+  let i = 0;
+  const skip = () => { while (i < s.length && s[i] === ' ') i++; };
+  function parseExpr() {
+    let v = parseTerm();
+    skip();
+    while (s[i] === '+' || s[i] === '-') {
+      const op = s[i++]; const r = parseTerm(); skip();
+      v = op === '+' ? v + r : v - r;
+    }
+    return v;
+  }
+  function parseTerm() {
+    let v = parseFactor();
+    skip();
+    while (s[i] === '*' || s[i] === '/' || s[i] === '%') {
+      const op = s[i++]; const r = parseFactor(); skip();
+      v = op === '*' ? v * r : op === '/' ? (r === 0 ? 0 : v / r) : (r === 0 ? 0 : v % r);
+    }
+    return v;
+  }
+  function parseFactor() {
+    skip();
+    if (s[i] === '+') { i++; return parseFactor(); }
+    if (s[i] === '-') { i++; return -parseFactor(); }
+    if (s[i] === '(') {
+      i++; const v = parseExpr(); skip();
+      if (s[i] === ')') i++; else return NaN;
+      return v;
+    }
+    // number
+    const m = /^[0-9]*\.?[0-9]+/.exec(s.slice(i));
+    if (m) { i += m[0].length; return parseFloat(m[0]); }
+    // identifier (variable)
+    const id = /^[a-zA-Z_][a-zA-Z0-9_]*/.exec(s.slice(i));
+    if (id) {
+      i += id[0].length;
+      return id[0] in vars ? vars[id[0]] : NaN;
+    }
+    return NaN;
+  }
+  const result = parseExpr();
+  skip();
+  return i === s.length ? result : NaN; // trailing junk → invalid
+}
+
+export function coerceNum(v, d = 0) {
+  if (typeof v === 'number') return isFinite(v) ? v : d;
+  if (v == null) return d;
+  const s = String(v);
+  // fast path: a plain number, no variables or operators
+  if (/^\s*-?[0-9]*\.?[0-9]+\s*$/.test(s)) return parseFloat(s);
+  // expression path (w/2, h*0.5, (w-100)/2 …)
+  const n = evalExpr(s);
+  return isFinite(n) ? n : d;
+}
+export function coerceStr(v, d = '') {
+  return v == null ? d : String(v);
+}
+export function coerceCol(v, d = '#000000') {
+  const s = String(v ?? '').trim();
+  if (s === 'none' || COLOR_RE.test(s)) return s;
+  return d;
+}
+export function coerce(type, v, d) {
+  if (type === 'num') return coerceNum(v, d);
+  if (type === 'col') return coerceCol(v, d);
+  return coerceStr(v, d);
+}
+
+// parse node text -> {type, tokens}
+export function parseText(text) {
+  const tokens = text.trim().split(/\s+/).filter(Boolean);
+  return { type: tokens[0] || '', tokens };
+}
+
+// raw typed value of arg i (undefined if not typed)
+export function argRaw(node, i) {
+  return node.tokens ? node.tokens[i + 1] : undefined;
+}
+
+// resolved typed value of arg i (typed token or default)
+export function argVal(node, i) {
+  const def = TYPES[node.type];
+  if (!def || !def.args || !def.args[i]) return undefined;
+  const [, type, dflt] = def.args[i];
+  const raw = argRaw(node, i);
+  return raw === undefined ? dflt : coerce(type, raw, dflt);
+}
+
+// inlet spec list for a node: [{name, type, arg}] — arg = index into args used as fallback
+export function inletsOf(node) {
+  const def = TYPES[node.type];
+  if (!def) return [];
+  if (def.gui) return [{ name: 'in', type: 'ctl' }];
+  if (def.loadbang) return [];
+  if (def.metro)   return [{ name: 'on', type: 'ctl' }, { name: 'ms', type: 'num', arg: 0 }];
+  if (def.until)   return [{ name: 'trig', type: 'ctl' }, { name: 'n', type: 'num', arg: 0 }];
+  if (def.stamp)   return [{ name: 'draw', type: 'draw' }, { name: 'trig', type: 'ctl' }, { name: 'clear', type: 'ctl' }];
+  if (def.counter) return [{ name: 'in', type: 'ctl' }, { name: 'set', type: 'ctl' }];
+  if (def.rand)    return [{ name: 'trig', type: 'ctl' }, { name: 'max', type: 'num', arg: 0 }];
+  if (def.fn)      return [{ name: 'a', type: 'num' }];
+  if (def.math)    return [{ name: 'a', type: 'num' }, { name: 'b', type: 'num', arg: 0 }];
+  if (def.compare) return [{ name: 'a', type: 'num' }, { name: 'b', type: 'num', arg: 0 }];
+  if (def.moses)   return [{ name: 'in', type: 'num' }, { name: 'thr', type: 'num', arg: 0 }];
+  if (def.trigger) return [{ name: 'in', type: 'ctl' }];
+  if (def.sel) {
+    // PD: a single-argument sel gets a right inlet to change the match value
+    return selArgs(node).length === 1
+      ? [{ name: 'in', type: 'ctl' }, { name: 'set', type: 'ctl' }]
+      : [{ name: 'in', type: 'ctl' }];
+  }
+  if (def.mouse)   return [];
+  if (def.comment) return [];
+  if (def.key)     return [];
+  if (def.recv)    return [];
+  if (def.send)    return [{ name: 'in', type: 'ctl' }];
+  if (def.ramp)    return [{ name: 'in', type: 'ctl' }, { name: 'ms', type: 'num', arg: 0 }];
+  if (def.noise)   return [{ name: 'in', type: 'num' }, { name: 'f', type: 'num', arg: 0 }];
+  if (def.clamp)   return [{ name: 'in', type: 'num' }, { name: 'a', type: 'num', arg: 0 }, { name: 'b', type: 'num', arg: 1 }];
+  if (def.change)  return [{ name: 'in', type: 'ctl' }];
+  if (def.hsl)     return def.args.map((a, i) => ({ name: a[0], type: a[1], arg: i }));
+  if (def.time)    return [{ name: 'in', type: 'ctl' }];
+  if (def.clip)    return [{ name: 'draw', type: 'draw' }, { name: 'mask', type: 'draw' }];
+  if (def.map)     return [{ name: 'in', type: 'num' }, ...def.args.map((a, i) => ({ name: a[0], type: a[1], arg: i }))];
+  if (def.spigot)  return [{ name: 'in', type: 'ctl' }, { name: 'open', type: 'num', arg: 0 }];
+  if (def.pipe)    return [{ name: 'in', type: 'ctl' }, { name: 'ms', type: 'num', arg: 0 }];
+  if (def.mode)    return [{ name: 'draw', type: 'draw' }, ...(def.args || []).map((a, i) => ({ name: a[0], type: a[1], arg: i }))];
+  if (def.xform)   return [{ name: 'draw', type: 'draw' }, ...(def.args || []).map((a, i) => ({ name: a[0], type: a[1], arg: i }))];
+  if (def.layer) {
+    const n = clamp(Math.round(coerceNum(argRaw(node, 1), 4)), 1, 12);
+    return Array.from({ length: n }, (_, i) => ({ name: 'd' + (i + 1), type: 'draw' }));
+  }
+  if (def.sink) {
+    return [
+      { name: 'draw', type: 'draw' },
+      { name: 'w', type: 'num', arg: 0 },
+      { name: 'h', type: 'num', arg: 1 },
+    ];
+  }
+  return def.args.map((a, i) => ({ name: a[0], type: a[1], arg: i }));
+}
+
+export function outTypeOf(node) {
+  const def = TYPES[node.type];
+  return def ? def.out : null;
+}
+
+// the values a sel node matches against (its typed arguments)
+export function selArgs(node) {
+  const a = (node.tokens || []).slice(1);
+  return a.length ? a : ['0'];
+}
+
+// does an incoming value equal a sel match token? (numeric tokens compare as numbers)
+export function selMatch(token, value) {
+  const s = String(token);
+  if (/^-?\d*\.?\d+$/.test(s)) return coerceNum(value, NaN) === parseFloat(s);
+  return String(value) === s;
+}
+
+// outlet spec list: [{name, type, mode?}] — most nodes have one, trigger/mouse/sel have several
+export function outletsOf(node) {
+  const def = TYPES[node.type];
+  if (!def) return [];
+  if (def.sel) {
+    return [
+      ...selArgs(node).map(v => ({ name: String(v), type: 'ctl' })),
+      { name: 'rest', type: 'ctl' },
+    ];
+  }
+  if (def.trigger) {
+    const letters = (node.tokens || []).slice(1).filter(x => x === 'b' || x === 'v');
+    const list = letters.length ? letters : ['v', 'v'];
+    return list.map(l => ({ name: l === 'b' ? 'bang' : 'value', type: 'ctl', mode: l }));
+  }
+  if (def.mouse) {
+    return [{ name: 'x', type: 'num' }, { name: 'y', type: 'num' }, { name: 'btn', type: 'num' }];
+  }
+  if (def.time) {
+    return [{ name: 'h', type: 'num' }, { name: 'm', type: 'num' }, { name: 's', type: 'num' }];
+  }
+  if (def.moses) {
+    return [{ name: '< thr', type: 'num' }, { name: '≥ thr', type: 'num' }];
+  }
+  return def.out ? [{ name: 'out', type: def.out }] : [];
+}
+
+// short arg-name hint for autocomplete (e.g. "x y w h fill stroke sw")
+export function argHint(type) {
+  const def = TYPES[type];
+  if (!def?.args?.length) return '';
+  return def.args.map(a => a[0]).join(' ');
+}
+
+// can a cable go from outlet type -> inlet type? (draw only into draw, control only into control)
+export function typesMatch(fromType, toType) {
+  if (!fromType || !toType) return false;
+  return (fromType === 'draw') === (toType === 'draw');
+}
+
+// ADD menu categories
+export const CATEGORIES = [
+  ['UI',     ['bng', 'number', 'string', 'toggle', 'hslider', 'vslider', 'mouse', 'key', 'comment']],
+  ['CTRL',   ['loadbang', 'metro', 'until', 'counter', 'random', 'noise', 'sin', 'cos', 'ramp', 't', 'sel', 'spigot', 'pipe', 'map', 'clamp', 'change', 'hsl', 'time', '+', '-', '*', '/', '>', '<', '==', '>=', 'moses']],
+  ['DRAW',   ['bg', 'gradient', 'rect', 'circle', 'ellipse', 'line', 'text', 'polygon', 'image', 'webcam', 'feedback', 'stamp', 'tile', 'mirror', 'clip', 'rotate', 'scale', 'translate', 'alpha', 'blend', 'shadow', 'dash', 'threshold', 'posterize', 'dither', 'pixelate', 'duotone', 'blur', 'invert', 'grayscale', 'contrast', 'brightness', 'hue']],
+  ['SYSTEM', ['layer', 'canvas', 'send', 'receive']],
+];
+
+// help texts: desc + use + inlets [name, type, desc] + args note + outlet
+export const HELP = {
+  bng: {
+    short: 'bang trigger',
+    desc: 'Bang button. Sends a bang message that makes other nodes act — the heartbeat of a patch.',
+    use: 'Click the circle to fire.',
+    inlets: [
+      ['in', 'any', 'anything received → fires a bang out'],
+    ],
+    out: 'bang',
+  },
+  number: {
+    short: 'value box + display',
+    desc: 'Number box. Stores one number, sends it, and DISPLAYS every number passing through — wire it inline (e.g. hslider → number → rect.x) to watch values live.',
+    use: 'Drag up/down to send values (Shift = steps of 10). Click to activate and type: Enter sends (Enter again re-sends), Escape or clicking outside cancels.',
+    inlets: [
+      ['in', 'any', 'bang → send the value / number → store, display and PASS THROUGH / "set N" (e.g. from a string node) → store and display WITHOUT sending'],
+    ],
+    out: 'num — the stored value',
+  },
+  string: {
+    short: 'text value',
+    desc: 'Text box (like a PD message box). Stores everything typed after the word "string" and sends it as a message.',
+    use: 'Click the box to send its text. Double-click to edit it.',
+    inlets: [
+      ['in', 'any', 'bang → send the text / any value → store it and send it'],
+    ],
+    out: 'str — the stored text',
+  },
+  toggle: {
+    short: 'on/off 1|0',
+    desc: 'Toggle switch. Sends 1 when switched on (✕) and 0 when switched off.',
+    use: 'Click the box to flip it (sends immediately). Drag the label strip to move the node.',
+    inlets: [
+      ['in', 'any', 'bang → flip and send / number → set on (≠0) or off (0) and send / "set N" → set without sending'],
+    ],
+    out: 'num — 1 or 0',
+  },
+  hslider: {
+    short: 'horizontal slider',
+    desc: 'Horizontal slider. Sends a number between min and max while you drag it.',
+    use: 'Drag inside the track to send values. Drag the label strip to move the node.',
+    inlets: [
+      ['in', 'any', 'bang → send the current value / number → set the value and send it / "set N" → set without sending'],
+    ],
+    args: 'min max — output range, typed in the node text (e.g. "hslider 0 800")',
+    out: 'num — the current value',
+  },
+  vslider: {
+    short: 'vertical slider',
+    desc: 'Vertical slider. Sends a number between min (bottom) and max (top) while you drag it.',
+    use: 'Drag inside the track to send values. Drag the label strip to move the node.',
+    inlets: [
+      ['in', 'any', 'bang → send the current value / number → set the value and send it / "set N" → set without sending'],
+    ],
+    args: 'min max — output range, typed in the node text (e.g. "vslider 0 800")',
+    out: 'num — the current value',
+  },
+  metro: {
+    short: 'auto bang',
+    desc: 'Metronome. Sends a bang every N milliseconds while switched on — the motor of an animated patch.',
+    use: 'Feed it a toggle to switch it on and off.',
+    inlets: [
+      ['on', 'any', 'bang or a number ≠0 → start / 0 → stop'],
+      ['ms', 'num', 'interval between bangs, in milliseconds (min 20)'],
+    ],
+    args: 'ms — interval in milliseconds (e.g. "metro 400")',
+    out: 'bang — one every N ms',
+  },
+  until: {
+    short: 'bang burst (the PD loop)',
+    desc: 'The Pure Data way to loop: a bang fires N bangs in a row, immediately — one per iteration. Feed them into a counter to get an index (0, 1, 2…), and drive positions from that.',
+    inlets: [
+      ['trig', 'any', 'bang → fire N bangs / number → fire that many bangs'],
+      ['n', 'num', 'set N, how many bangs one trig fires'],
+    ],
+    args: 'n — default number of bangs (e.g. "until 100")',
+    out: 'bang — N of them, back to back',
+  },
+  counter: {
+    short: 'counting bang',
+    desc: 'Counter. Each bang sends the current count, then advances by step — wrapping back to min after max. Pair it with metro for loops: metro → counter 0 360 5 → sin gives a smooth wave.',
+    inlets: [
+      ['in', 'any', 'HOT — bang → send the count and advance / number → set the count, send it and advance'],
+      ['set', 'any', 'COLD — bang → reset to min / number → jump to that value (no output)'],
+    ],
+    args: 'min max step (e.g. "counter 0 360 5")',
+    out: 'num — the current count',
+  },
+  sin: {
+    short: 'sine (degrees)',
+    desc: 'Sine function. Takes an angle in DEGREES and sends sin(a) — a number between −1 and 1. Chain counter → sin → * amplitude → + offset for smooth wave motion.',
+    inlets: [
+      ['a', 'num', 'angle in degrees → send sin(a) / bang → resend the last result'],
+    ],
+    out: 'num — sin(a), between −1 and 1',
+  },
+  cos: {
+    short: 'cosine (degrees)',
+    desc: 'Cosine function. Takes an angle in DEGREES and sends cos(a) — a number between −1 and 1. Use sin for x and cos for y (same angle) to move in a circle.',
+    inlets: [
+      ['a', 'num', 'angle in degrees → send cos(a) / bang → resend the last result'],
+    ],
+    out: 'num — cos(a), between −1 and 1',
+  },
+  random: {
+    short: 'random number',
+    desc: 'Random number generator. On any input, sends a whole number from 0 to max−1.',
+    inlets: [
+      ['trig', 'any', 'bang (or anything) → send a new random number'],
+      ['max', 'num', 'upper limit (exclusive)'],
+    ],
+    args: 'max — upper limit (e.g. "random 800")',
+    out: 'num — random whole number, 0…max−1',
+  },
+  '+': {
+    short: 'add: a + b',
+    desc: 'Adds two numbers: a + b. The LEFT inlet is hot (computes and sends), the RIGHT is cold (only stores).',
+    inlets: [
+      ['a', 'num', 'HOT — number → store it, compute and send / bang → recompute and send'],
+      ['b', 'num', 'COLD — store the right operand'],
+    ],
+    args: 'b — right operand (e.g. "+ 10")',
+    out: 'num — a + b',
+  },
+  '-': {
+    short: 'subtract: a − b',
+    desc: 'Subtracts: a − b. The LEFT inlet is hot (computes and sends), the RIGHT is cold (only stores).',
+    inlets: [
+      ['a', 'num', 'HOT — number → store it, compute and send / bang → recompute and send'],
+      ['b', 'num', 'COLD — store the right operand'],
+    ],
+    args: 'b — right operand (e.g. "- 10")',
+    out: 'num — a − b',
+  },
+  '*': {
+    short: 'multiply: a × b',
+    desc: 'Multiplies: a × b. The LEFT inlet is hot (computes and sends), the RIGHT is cold (only stores).',
+    inlets: [
+      ['a', 'num', 'HOT — number → store it, compute and send / bang → recompute and send'],
+      ['b', 'num', 'COLD — store the right operand'],
+    ],
+    args: 'b — right operand (e.g. "* 2")',
+    out: 'num — a × b',
+  },
+  '/': {
+    short: 'divide: a ÷ b',
+    desc: 'Divides: a ÷ b. The LEFT inlet is hot (computes and sends), the RIGHT is cold (only stores). Division by zero sends 0.',
+    inlets: [
+      ['a', 'num', 'HOT — number → store it, compute and send / bang → recompute and send'],
+      ['b', 'num', 'COLD — store the right operand'],
+    ],
+    args: 'b — right operand (e.g. "/ 2")',
+    out: 'num — a ÷ b',
+  },
+  loadbang: {
+    short: 'bang on load',
+    desc: 'Sends one bang the moment the patch is loaded — on app start, opening a demo, or loading a file. The PD way to make a patch start by itself: wire it wherever you would otherwise click a bng.',
+    use: 'It fires only on load. A freshly added loadbang stays quiet until the patch is opened again (save it first, or reload).',
+    inlets: [],
+    out: 'bang — once, when the patch loads',
+  },
+  map: {
+    short: 'remap a range',
+    desc: 'Maps an incoming number from the range a…b to the range c…d. The classic slider adapter: "map 0 100 0 800" turns a 0–100 slider into canvas pixels. The output is NOT clamped — inputs outside a…b extrapolate.',
+    inlets: [
+      ['in', 'num', 'HOT — number → remap and send / bang → resend the last result'],
+      ['a', 'num', 'COLD — input range start'],
+      ['b', 'num', 'COLD — input range end'],
+      ['c', 'num', 'COLD — output range start'],
+      ['d', 'num', 'COLD — output range end'],
+    ],
+    args: 'a b c d (e.g. "map 0 100 20 90")',
+    out: 'num — the remapped value',
+  },
+  comment: {
+    short: 'patch annotation',
+    desc: 'A text note that lives in the patch. No inlets, no outlets, no effect on the canvas — it only explains the patch to whoever reads it next.',
+    use: 'Type "comment your text here". Double-click to edit, drag to move, Delete to remove.',
+    inlets: [],
+    out: '— (none)',
+  },
+  alpha: {
+    short: 'transparency',
+    desc: 'Sets the opacity of everything passing through it: 1 = solid, 0 = invisible. Nested alphas multiply.',
+    inlets: [
+      ['draw', 'draw', 'the shapes to make transparent'],
+      ['a', 'num', 'opacity, 0…1'],
+    ],
+    args: 'a — opacity 0…1 (e.g. "alpha 0.5")',
+    out: 'draw — the transparent draw signal',
+  },
+  blend: {
+    short: 'blend mode',
+    desc: 'Sets the blend mode of everything passing through it — how it mixes with what is already drawn below. Put it BETWEEN a layer and the canvas ("layer 2 → blend multiply → canvas") and it applies to that layer only. Modes: normal, multiply, screen, overlay, darken, lighten, difference, exclusion.',
+    inlets: [
+      ['draw', 'draw', 'the shapes to blend'],
+      ['mode', 'str', 'blend mode name (connect a string node to change it live)'],
+    ],
+    args: 'mode (e.g. "blend difference")',
+    out: 'draw — the blended draw signal',
+  },
+  tile: {
+    short: 'repeat in a grid',
+    desc: 'Repeats everything passing through it in an nx × ny grid, stepping dx px right and dy px down. What stamp does over time, tile does in space — patterns from a single shape, no loop needed.',
+    inlets: [
+      ['draw', 'draw', 'the shapes to repeat'],
+      ['nx', 'num', 'columns'],
+      ['ny', 'num', 'rows'],
+      ['dx', 'num', 'horizontal step in px'],
+      ['dy', 'num', 'vertical step in px'],
+    ],
+    args: 'nx ny dx dy (e.g. "tile 4 4 200 200")',
+    out: 'draw — the tiled draw signal',
+  },
+  mirror: {
+    short: 'mirror + original',
+    desc: 'Outputs everything passing through it PLUS its mirror image across an axis: "mirror x 400" reflects across the vertical line x=400, "mirror y 400" across the horizontal line y=400. Chain two mirrors (x then y) for four-fold kaleidoscope symmetry.',
+    inlets: [
+      ['draw', 'draw', 'the shapes to mirror'],
+      ['axis', 'str', '"x" (vertical mirror line) or "y" (horizontal mirror line)'],
+      ['pos', 'num', 'position of the mirror line in px'],
+    ],
+    args: 'axis pos (e.g. "mirror x 400")',
+    out: 'draw — original + reflected copy',
+  },
+  image: {
+    short: 'image from URL',
+    desc: 'Draws an image loaded from a URL, centered on x,y. Set w or h to 0 to use the image\'s natural size. The URL must allow cross-origin use (CORS), or the browser will refuse to load it — e.g. picsum.photos works.',
+    use: 'The canvas re-renders automatically when the image finishes loading.',
+    inlets: [
+      ['url', 'str', 'image URL (no spaces — connect a string node for longer ones)'],
+      ['x', 'num', 'center X position'],
+      ['y', 'num', 'center Y position'],
+      ['w', 'num', 'width in px (0 = natural)'],
+      ['h', 'num', 'height in px (0 = natural)'],
+    ],
+    args: 'url x y w h',
+    out: 'draw — draw signal',
+  },
+  clamp: {
+    short: 'limit to a range',
+    desc: 'Clamps an incoming number into the range a…b: values below a become a, values above b become b, everything else passes unchanged. The seatbelt for noise, mouse and math chains.',
+    inlets: [
+      ['in', 'num', 'HOT — number → clamp and send / bang → resend the last result'],
+      ['a', 'num', 'COLD — lower bound'],
+      ['b', 'num', 'COLD — upper bound'],
+    ],
+    args: 'a b (e.g. "clamp 0 800")',
+    out: 'num — the clamped value',
+  },
+  change: {
+    short: 'only pass changes',
+    desc: 'Passes a message on only when it DIFFERS from the previous one; repeats are dropped. Put it behind mouse or noise to thin out floods of identical values.',
+    inlets: [
+      ['in', 'any', 'value → pass it only if it changed / bang → resend the last value'],
+    ],
+    out: 'any — the value, once per change',
+  },
+  hsl: {
+    short: 'color from numbers',
+    desc: 'Builds a hex color string from three numbers — hue 0–360, saturation 0–100, lightness 0–100 — and sends it into any color inlet. This is animated color: counter → hsl → fill is a hue rotation, noise → the l inlet makes a color breathe.',
+    inlets: [
+      ['h', 'num', 'HOT — hue in degrees (wraps around 360) → compute and send / bang → resend'],
+      ['s', 'num', 'COLD — saturation 0–100'],
+      ['l', 'num', 'COLD — lightness 0–100'],
+    ],
+    args: 'h s l (e.g. "hsl 200 80 60")',
+    out: 'str — a "#rrggbb" color',
+  },
+  time: {
+    short: 'clock (h m s)',
+    desc: 'On any input, sends the current time of day through three outlets: hours (0–23), minutes and seconds. metro 1000 → time → * 6 → rotate is a working clock hand.',
+    inlets: [
+      ['in', 'any', 'bang (or anything) → send the current time'],
+    ],
+    outs: [
+      ['h', 'num', 'hours, 0–23'],
+      ['m', 'num', 'minutes, 0–59'],
+      ['s', 'num', 'seconds, 0–59'],
+    ],
+    out: 'h, m, s (right outlet fires first)',
+  },
+  ramp: {
+    short: 'glide to a value',
+    desc: 'The PD [line]: when a number arrives, ramp does not jump — it GLIDES from its current value to the target over N milliseconds, sending intermediate values along the way. Put it in front of any position/size inlet and jumps become motion.',
+    inlets: [
+      ['in', 'any', 'number → glide to it / bang → resend the current value'],
+      ['ms', 'num', 'set the glide time for the next ramps'],
+    ],
+    args: 'ms — glide duration in milliseconds (e.g. "ramp 600")',
+    out: 'num — a stream of values from here to the target',
+  },
+  noise: {
+    short: 'smooth noise',
+    desc: 'Smooth 1D noise: feed it a running number (counter, time) and it returns an organic wander between −1 and 1. What random does nervously, noise does naturally — drift, wobble, hand-drawn feel. Same input always gives the same output.',
+    use: 'Add an offset to the input (e.g. + 5000) to get a second, independent noise stream from the same counter.',
+    inlets: [
+      ['in', 'num', 'position/time → send noise(in × f) / bang → resend'],
+      ['f', 'num', 'frequency — smaller = smoother (default 0.05)'],
+    ],
+    args: 'f — frequency (e.g. "noise 0.02")',
+    out: 'num — smooth noise, −1…1',
+  },
+  key: {
+    short: 'keyboard input',
+    desc: 'Sends the name of every key pressed — "a", "5", "ArrowLeft", " "… Feed it into sel to react to specific keys: key → sel r → bang when R is pressed.',
+    use: 'Keys typed while editing a node or a value box are ignored.',
+    inlets: [],
+    out: 'str — the key name, on every press',
+  },
+  send: {
+    short: 'wireless out',
+    desc: 'Sends every incoming message to ALL receive nodes with the same name — no cable needed. The PD way to keep big patches readable: control messages travel by name, only draw signals need cables.',
+    inlets: [
+      ['in', 'any', 'any message → deliver it to every matching receive'],
+    ],
+    args: 'name — the channel (e.g. "send tick")',
+    out: '— (none — the matching receive nodes output instead)',
+  },
+  receive: {
+    short: 'wireless in',
+    desc: 'Outputs everything that a send node with the same name receives, anywhere in the patch. Many receives can listen to one send, and many sends can feed one receive.',
+    inlets: [],
+    args: 'name — the channel (e.g. "receive tick")',
+    out: 'any — whatever the matching send got',
+  },
+  gradient: {
+    short: 'linear gradient fill',
+    desc: 'Fills the whole canvas with a linear gradient running from point 1 to point 2, blending color c1 into c2. A bg with direction — put it in the bottom layer. Feed the color inlets from hsl for a living background.',
+    inlets: [
+      ['x1', 'num', 'gradient start X'],
+      ['y1', 'num', 'gradient start Y'],
+      ['x2', 'num', 'gradient end X'],
+      ['y2', 'num', 'gradient end Y'],
+      ['c1', 'col', 'start color (#hex)'],
+      ['c2', 'col', 'end color (#hex)'],
+    ],
+    args: 'x1 y1 x2 y2 c1 c2 (e.g. "gradient 0 0 800 800 #000000 #ffffff")',
+    out: 'draw — draw signal',
+  },
+  clip: {
+    short: 'mask (clip to a shape)',
+    desc: 'Clips its draw input to the silhouette of the mask input: whatever arrives at the mask inlet (rect, circle, ellipse, polygon — also tiled, mirrored or transformed) becomes a stencil, and the content is only visible inside it. Image in a circle, pattern inside a letterform-sized rect, texture inside a polygon.',
+    use: 'Lines, text and images are ignored as masks — use the solid shapes. Several shapes in the mask make a combined stencil.',
+    inlets: [
+      ['draw', 'draw', 'the content to be clipped'],
+      ['mask', 'draw', 'the shape(s) that define where content is visible'],
+    ],
+    out: 'draw — the clipped content',
+  },
+  dash: {
+    short: 'dashed strokes',
+    desc: 'Makes every stroke passing through it dashed: a px of line, then b px of gap. Fills are unaffected. Blueprint and map aesthetics in one node.',
+    inlets: [
+      ['draw', 'draw', 'the shapes whose strokes become dashed'],
+      ['a', 'num', 'dash length in px'],
+      ['b', 'num', 'gap length in px'],
+    ],
+    args: 'a b (e.g. "dash 6 10")',
+    out: 'draw — the dashed draw signal',
+  },
+  '>': {
+    short: 'greater than → 1|0',
+    desc: 'Comparison: sends 1 if a > b, else 0. Feed the result into a spigot (as a gate) or a sel to trigger conditional behaviour — "if x > 400, do this". Left inlet is hot, right is cold.',
+    inlets: [
+      ['a', 'num', 'HOT — number → compare and send / bang → resend'],
+      ['b', 'num', 'COLD — the value to compare against'],
+    ],
+    args: 'b — right operand (e.g. "> 400")',
+    out: 'num — 1 if a > b, else 0',
+  },
+  '<': {
+    short: 'less than → 1|0',
+    desc: 'Comparison: sends 1 if a < b, else 0. Left inlet is hot, right is cold.',
+    inlets: [
+      ['a', 'num', 'HOT — number → compare and send / bang → resend'],
+      ['b', 'num', 'COLD — the value to compare against'],
+    ],
+    args: 'b — right operand (e.g. "< 100")',
+    out: 'num — 1 if a < b, else 0',
+  },
+  '==': {
+    short: 'equal → 1|0',
+    desc: 'Comparison: sends 1 if a equals b, else 0. Great after a counter: "== 0" fires only on the first step. Left inlet is hot, right is cold.',
+    inlets: [
+      ['a', 'num', 'HOT — number → compare and send / bang → resend'],
+      ['b', 'num', 'COLD — the value to compare against'],
+    ],
+    args: 'b — right operand (e.g. "== 0")',
+    out: 'num — 1 if a == b, else 0',
+  },
+  '>=': {
+    short: 'greater-or-equal → 1|0',
+    desc: 'Comparison: sends 1 if a ≥ b, else 0. Left inlet is hot, right is cold.',
+    inlets: [
+      ['a', 'num', 'HOT — number → compare and send / bang → resend'],
+      ['b', 'num', 'COLD — the value to compare against'],
+    ],
+    args: 'b — right operand (e.g. ">= 128")',
+    out: 'num — 1 if a ≥ b, else 0',
+  },
+  moses: {
+    short: 'split at a threshold',
+    desc: 'Routes a number by a threshold (PD classic): values BELOW thr come out the left outlet, values AT-OR-ABOVE come out the right — both unchanged. Fork a stream into two paths with one node.',
+    inlets: [
+      ['in', 'num', 'the number to route'],
+      ['thr', 'num', 'threshold (cold)'],
+    ],
+    args: 'thr — threshold (e.g. "moses 400")',
+    outs: [
+      ['< thr', 'num', 'values below the threshold'],
+      ['≥ thr', 'num', 'values at or above the threshold'],
+    ],
+    out: 'below → left, at-or-above → right',
+  },
+  threshold: {
+    short: 'black & white cutoff',
+    desc: 'A pixel effect: rasterises everything passing through it, then forces each pixel to pure black or white — bright pixels (luminance ≥ level) turn white, the rest black. High-contrast, stencil look. Put it after a layer to threshold the whole thing.',
+    inlets: [
+      ['draw', 'draw', 'the shapes/image to threshold'],
+      ['level', 'num', 'cutoff brightness, 0–255 (higher = more black)'],
+    ],
+    args: 'level — cutoff 0–255 (e.g. "threshold 128")',
+    out: 'draw — black & white draw signal',
+  },
+  posterize: {
+    short: 'reduce colour steps',
+    desc: 'A pixel effect: quantises each colour channel to a small number of levels, flattening smooth gradients into bands. Keeps hue, kills subtlety — screenprint / risograph feel.',
+    inlets: [
+      ['draw', 'draw', 'the shapes/image to posterise'],
+      ['levels', 'num', 'steps per channel, 2–64 (fewer = flatter)'],
+    ],
+    args: 'levels — steps per channel (e.g. "posterize 4")',
+    out: 'draw — posterised draw signal',
+  },
+  dither: {
+    short: 'ordered dither',
+    desc: 'A pixel effect: converts to black & white using an ordered (Bayer) dither, so shades become patterns of dots instead of solid grey. Classic 1-bit / newsprint look. scale makes the dots chunkier; levels adds grey steps.',
+    inlets: [
+      ['draw', 'draw', 'the shapes/image to dither'],
+      ['scale', 'num', 'dot size in px, 1+ (bigger = chunkier)'],
+      ['levels', 'num', 'output shades, 2–8 (2 = pure b&w)'],
+    ],
+    args: 'scale levels (e.g. "dither 2 2")',
+    out: 'draw — dithered draw signal',
+  },
+  pixelate: {
+    short: 'mosaic / low-res',
+    desc: 'A pixel effect: averages the image into square blocks, giving a chunky low-resolution mosaic. Pairs with threshold and dither for a lo-fi, retro feel.',
+    inlets: [
+      ['draw', 'draw', 'the shapes/image to pixelate'],
+      ['size', 'num', 'block size in px (bigger = blockier)'],
+    ],
+    args: 'size — block size in px (e.g. "pixelate 12")',
+    out: 'draw — pixelated draw signal',
+  },
+  duotone: {
+    short: 'two-colour map',
+    desc: 'A pixel effect: maps brightness onto a two-colour ramp — dark pixels become the dark colour, bright pixels the light colour, midtones blend between. Feed dither into duotone for the signature riso / newsprint-in-colour look.',
+    inlets: [
+      ['draw', 'draw', 'the shapes/image to map'],
+      ['dark', 'col', 'colour for the shadows (#hex)'],
+      ['light', 'col', 'colour for the highlights (#hex)'],
+    ],
+    args: 'dark light (e.g. "duotone #1a1a40 #ff5050")',
+    out: 'draw — duotone draw signal',
+  },
+  blur: {
+    short: 'gaussian blur',
+    desc: 'A filter effect: composites everything passing through it, then blurs the whole thing by radius px. Soft glows, depth, out-of-focus layers.',
+    inlets: [
+      ['draw', 'draw', 'the shapes/image to blur'],
+      ['radius', 'num', 'blur radius in px'],
+    ],
+    args: 'radius — blur radius in px (e.g. "blur 8")',
+    out: 'draw — blurred draw signal',
+  },
+  invert: {
+    short: 'invert colours',
+    desc: 'A filter effect: inverts the colours of everything passing through it (black ↔ white, and every hue to its opposite).',
+    inlets: [['draw', 'draw', 'the shapes/image to invert']],
+    out: 'draw — inverted draw signal',
+  },
+  grayscale: {
+    short: 'desaturate',
+    desc: 'A filter effect: removes all colour, leaving luminance only.',
+    inlets: [['draw', 'draw', 'the shapes/image to desaturate']],
+    out: 'draw — grayscale draw signal',
+  },
+  contrast: {
+    short: 'adjust contrast',
+    desc: 'A filter effect: scales contrast — 1 = unchanged, >1 punchier, <1 flatter, 0 = solid grey.',
+    inlets: [
+      ['draw', 'draw', 'the shapes/image to adjust'],
+      ['amount', 'num', 'contrast factor (1 = normal)'],
+    ],
+    args: 'amount — contrast factor (e.g. "contrast 1.8")',
+    out: 'draw — contrast-adjusted draw signal',
+  },
+  brightness: {
+    short: 'adjust brightness',
+    desc: 'A filter effect: scales brightness — 1 = unchanged, >1 brighter, <1 darker, 0 = black.',
+    inlets: [
+      ['draw', 'draw', 'the shapes/image to adjust'],
+      ['amount', 'num', 'brightness factor (1 = normal)'],
+    ],
+    args: 'amount — brightness factor (e.g. "brightness 1.4")',
+    out: 'draw — brightness-adjusted draw signal',
+  },
+  hue: {
+    short: 'rotate hue',
+    desc: 'A filter effect: rotates every colour around the hue wheel by deg degrees. Drive it from a counter for a colour cycle over the whole layer.',
+    inlets: [
+      ['draw', 'draw', 'the shapes/image to shift'],
+      ['deg', 'num', 'hue rotation in degrees'],
+    ],
+    args: 'deg — hue rotation in degrees (e.g. "hue 120")',
+    out: 'draw — hue-shifted draw signal',
+  },
+  shadow: {
+    short: 'drop shadow',
+    desc: 'Adds a drop shadow to everything passing through it: blur radius, offset dx/dy and color. Cheap depth for posters and UI mockups.',
+    inlets: [
+      ['draw', 'draw', 'the shapes to shade'],
+      ['blur', 'num', 'shadow blur radius in px'],
+      ['dx', 'num', 'shadow offset X'],
+      ['dy', 'num', 'shadow offset Y'],
+      ['color', 'col', 'shadow color (#hex or none)'],
+    ],
+    args: 'blur dx dy color (e.g. "shadow 40 0 24 #000000")',
+    out: 'draw — the shaded draw signal',
+  },
+  ellipse: {
+    short: 'ellipse',
+    desc: 'Draws an ellipse, centered on x,y, with full width w and height h (like rect, unlike circle\'s radius).',
+    inlets: [
+      ['x', 'num', 'center X position'],
+      ['y', 'num', 'center Y position'],
+      ['w', 'num', 'full width in px'],
+      ['h', 'num', 'full height in px'],
+      ['fill', 'col', 'fill color (#hex or none)'],
+      ['stroke', 'col', 'stroke color (#hex or none)'],
+      ['sw', 'num', 'stroke width in px'],
+    ],
+    out: 'draw — draw signal',
+  },
+  t: {
+    short: 'order control (trigger)',
+    desc: 'Trigger. One message in, fired out through one outlet per argument, RIGHT to LEFT: "v" passes the incoming value on, "b" sends a bang. This is the PD way to make message order explicit instead of relying on cable creation order — e.g. "t b b" into stamp: right outlet clears first, left outlet runs the loop.',
+    inlets: [
+      ['in', 'any', 'any message → fire all outlets, rightmost first'],
+    ],
+    args: 'a sequence of v / b, one outlet each (e.g. "t b v"); no args = "t v v"',
+    outs: [
+      ['1…n', 'any', 'per argument: v passes the value, b sends a bang — RIGHT outlet fires FIRST'],
+    ],
+    out: 'one outlet per argument',
+  },
+  sel: {
+    short: 'match → bang (select)',
+    desc: 'Select. Compares every incoming value with its arguments: on a match, that argument\'s outlet sends a bang; everything else falls out of the RIGHTMOST outlet unchanged. With a counter in front it becomes a step sequencer: "on step 3, do this".',
+    use: 'One outlet per argument, plus the pass-through outlet on the far right. Arguments can be numbers or words.',
+    inlets: [
+      ['in', 'any', 'the value to test against the arguments'],
+      ['set', 'any', 'only when there is a single argument — sets the match value'],
+    ],
+    args: 'one or more values to match (e.g. "sel 0 4 8" or "sel GO")',
+    outs: [
+      ['match', 'bang', 'one outlet per argument — bangs when the input equals it'],
+      ['rest', 'any', 'rightmost — passes every non-matching input through'],
+    ],
+    out: 'bang per match + pass-through',
+  },
+  spigot: {
+    short: 'message gate',
+    desc: 'A gate for messages. While open, everything arriving at the left inlet passes through unchanged; while closed, it is dropped. Control it with a toggle — or with the btn outlet of mouse for press-and-drag behaviour.',
+    inlets: [
+      ['in', 'any', 'HOT — passes through when the gate is open'],
+      ['open', 'num', 'COLD — 1 opens the gate, 0 closes it'],
+    ],
+    args: 'open — initial state, 1 or 0 (e.g. "spigot 1")',
+    out: 'any — whatever passed the gate',
+  },
+  pipe: {
+    short: 'delay messages',
+    desc: 'Delays every message by N milliseconds, then sends it on unchanged. Chain several pipes for step sequences.',
+    inlets: [
+      ['in', 'any', 'message → send it on after the delay'],
+      ['ms', 'num', 'set the delay time in milliseconds'],
+    ],
+    args: 'ms — delay in milliseconds (e.g. "pipe 1000")',
+    out: 'any — the delayed message',
+  },
+  mouse: {
+    short: 'cursor input',
+    desc: 'The mouse over the PREVIEW canvas, in canvas coordinates. Streams x and y while the cursor moves; the btn outlet sends 1 on press and 0 on release. mouse → circle x/y + btn → spigot gating a metro that bangs a stamp = freehand drawing.',
+    inlets: [],
+    outs: [
+      ['x', 'num', 'cursor X in canvas px, streams while moving'],
+      ['y', 'num', 'cursor Y in canvas px, streams while moving'],
+      ['btn', 'num', '1 when the button goes down, 0 when it goes up'],
+    ],
+    out: 'x, y, btn',
+  },
+  rotate: {
+    short: 'rotate draw signal',
+    desc: 'Rotates everything passing through it by deg degrees around the pivot cx,cy. Transforms stack freely: shape → rotate → scale → layer. Drive deg from until + counter and stamp each step for radial patterns and mandalas.',
+    inlets: [
+      ['draw', 'draw', 'the shapes to rotate'],
+      ['deg', 'num', 'angle in degrees'],
+      ['cx', 'num', 'pivot X'],
+      ['cy', 'num', 'pivot Y'],
+    ],
+    args: 'deg cx cy (e.g. "rotate 45 400 400")',
+    out: 'draw — the rotated draw signal',
+  },
+  scale: {
+    short: 'scale draw signal',
+    desc: 'Scales everything passing through it by the factor s around the pivot cx,cy (1 = unchanged, 2 = double, 0.5 = half).',
+    inlets: [
+      ['draw', 'draw', 'the shapes to scale'],
+      ['s', 'num', 'scale factor'],
+      ['cx', 'num', 'pivot X'],
+      ['cy', 'num', 'pivot Y'],
+    ],
+    args: 's cx cy (e.g. "scale 1.5 400 400")',
+    out: 'draw — the scaled draw signal',
+  },
+  translate: {
+    short: 'move draw signal',
+    desc: 'Shifts everything passing through it by dx,dy pixels.',
+    inlets: [
+      ['draw', 'draw', 'the shapes to move'],
+      ['dx', 'num', 'shift in X'],
+      ['dy', 'num', 'shift in Y'],
+    ],
+    args: 'dx dy (e.g. "translate 100 0")',
+    out: 'draw — the shifted draw signal',
+  },
+  bg: {
+    short: 'fill background',
+    desc: 'Fills the whole canvas with one color. Put it in the bottom layer.',
+    inlets: [
+      ['color', 'col', 'background color (#hex or none)'],
+    ],
+    out: 'draw — draw signal',
+  },
+  rect: {
+    short: 'rectangle',
+    desc: 'Draws a rectangle. x,y is the CENTER of the shape.',
+    inlets: [
+      ['x', 'num', 'center X position'],
+      ['y', 'num', 'center Y position'],
+      ['w', 'num', 'width in px'],
+      ['h', 'num', 'height in px'],
+      ['fill', 'col', 'fill color (#hex or none)'],
+      ['stroke', 'col', 'stroke color (#hex or none)'],
+      ['sw', 'num', 'stroke width in px'],
+    ],
+    out: 'draw — draw signal',
+  },
+  circle: {
+    short: 'circle',
+    desc: 'Draws a circle. x,y is the CENTER.',
+    inlets: [
+      ['x', 'num', 'center X position'],
+      ['y', 'num', 'center Y position'],
+      ['r', 'num', 'radius in px'],
+      ['fill', 'col', 'fill color (#hex or none)'],
+      ['stroke', 'col', 'stroke color (#hex or none)'],
+      ['sw', 'num', 'stroke width in px'],
+    ],
+    out: 'draw — draw signal',
+  },
+  line: {
+    short: 'straight line',
+    desc: 'Draws a straight line from point 1 to point 2.',
+    inlets: [
+      ['x1', 'num', 'start X'],
+      ['y1', 'num', 'start Y'],
+      ['x2', 'num', 'end X'],
+      ['y2', 'num', 'end Y'],
+      ['color', 'col', 'line color (#hex or none)'],
+      ['w', 'num', 'line width in px'],
+    ],
+    out: 'draw — draw signal',
+  },
+  text: {
+    short: 'draw text',
+    desc: 'Draws text anchored at x,y. A "|" in the word breaks the line (multiline). Fonts: mono (Martian), plex, inter, grotesk, serif.',
+    use: 'Connect a string node into word for multi-word text. Weight: 100–900 (needs to exist in the font). Align moves the anchor: left/center/right.',
+    inlets: [
+      ['word', 'str', 'the text to draw — "|" starts a new line'],
+      ['x', 'num', 'anchor X position'],
+      ['y', 'num', 'anchor Y position (centre of the line block)'],
+      ['size', 'num', 'font size in px'],
+      ['color', 'col', 'text color (#hex or none)'],
+      ['font', 'str', 'mono / plex / inter / grotesk / serif'],
+      ['weight', 'num', 'font weight 100–900'],
+      ['align', 'str', 'left / center / right'],
+      ['track', 'num', 'letter-spacing in px'],
+    ],
+    args: 'word x y size color font weight align track',
+    out: 'draw — draw signal',
+  },
+  webcam: {
+    short: 'live camera',
+    desc: 'Draws the live camera image, mirrored like a selfie and cover-cropped to w × h, centered on x,y. The browser asks for camera permission on first use. Feed it into dither → duotone for a live riso mirror.',
+    use: 'The canvas re-renders continuously (~30fps) while a webcam node exists in the patch.',
+    inlets: [
+      ['x', 'num', 'center X position'],
+      ['y', 'num', 'center Y position'],
+      ['w', 'num', 'width in px'],
+      ['h', 'num', 'height in px'],
+    ],
+    args: 'x y w h',
+    out: 'draw — the live camera as a draw signal',
+  },
+  feedback: {
+    short: 'previous frame',
+    desc: 'Outputs the PREVIOUS rendered frame as a draw source, placed centered on x,y at w × h. Route it through scale / rotate / alpha and put it UNDER your moving shapes: every frame repaints history — trails, tunnels, infinite zoom.',
+    use: 'The canvas re-renders continuously (~30fps) while a feedback node exists. Classic recipe: feedback → scale 0.98 → alpha 0.95 → layer 1, moving shape → layer 2.',
+    inlets: [
+      ['x', 'num', 'center X position'],
+      ['y', 'num', 'center Y position'],
+      ['w', 'num', 'width in px'],
+      ['h', 'num', 'height in px'],
+    ],
+    args: 'x y w h (defaults cover the whole canvas)',
+    out: 'draw — last frame as a draw signal',
+  },
+  polygon: {
+    short: 'regular polygon',
+    desc: 'Draws a regular polygon with n sides, centered on x,y. rot spins it around its own center.',
+    inlets: [
+      ['x', 'num', 'center X position'],
+      ['y', 'num', 'center Y position'],
+      ['r', 'num', 'radius in px (center to corner)'],
+      ['n', 'num', 'number of sides (3 = triangle, 6 = hexagon…)'],
+      ['rot', 'num', 'rotation around its own center, degrees'],
+      ['fill', 'col', 'fill color (#hex or none)'],
+      ['stroke', 'col', 'stroke color (#hex or none)'],
+      ['sw', 'num', 'stroke width in px'],
+    ],
+    out: 'draw — draw signal',
+  },
+  stamp: {
+    short: 'stamp frozen copies',
+    desc: 'Stamps frozen copies of its draw input. Every bang on the trig inlet captures the CURRENT state of the incoming shape and adds it to the pile — the outlet plays back all stamped copies. The classic pattern: until → counter moves a shape AND bangs the stamp → 100 copies along a curve. With metro it leaves trails.',
+    use: 'Cables fire in the order they were made — connect the movement cables first and the trig cable last, so the shape moves before it is stamped.',
+    inlets: [
+      ['draw', 'draw', 'the shape(s) to copy'],
+      ['trig', 'any', 'bang → stamp the current state of the input'],
+      ['clear', 'any', 'anything → erase all stamps'],
+    ],
+    args: 'max — how many copies are kept, oldest dropped first (default 500)',
+    out: 'draw — all stamped copies',
+  },
+  layer: {
+    short: 'compositing layer',
+    desc: 'A compositing layer, like in a design tool. The first argument is the layer NUMBER: layer 1 sits at the bottom of the canvas, higher numbers are drawn on top — no matter in which order the cables were connected. Within one layer, inlet 1 is at the bottom.',
+    inlets: [
+      ['d1…dn', 'draw', 'draw signals grouped into this layer (inlet 1 = bottom of the group)'],
+    ],
+    args: 'z count — layer number + number of inlets, 1–12 (e.g. "layer 2 6")',
+    out: 'draw — the layer, connect it to the canvas',
+  },
+  canvas: {
+    short: 'render output',
+    desc: 'The output canvas — the sink of the patch (like dac~ in Pure Data). The draw inlet accepts MANY cables: everything arriving is stacked by the sender\'s layer number (layer 1 bottom, higher on top; non-layer senders count as layer 0) and rendered continuously.',
+    use: 'The width and height become the variables w and h — usable in any numeric field as an expression: "rect w/2 h/2 w/4 h/4" centres a quarter-size rect. Supports + - * / % and ( ).',
+    inlets: [
+      ['draw', 'draw', 'draw signals to render — takes multiple cables, stacked by layer number'],
+      ['w', 'num', 'canvas width in px — also the variable w'],
+      ['h', 'num', 'canvas height in px — also the variable h'],
+    ],
+    out: '— (none)',
+  },
+};

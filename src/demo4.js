@@ -1,0 +1,45 @@
+// demo 4 — PATTERN: tile + mirror + blend + map, annotated with comments
+// a triangle and a circle are each tiled 4x4; the circle grid sits on top with
+// blend difference, inverting every overlap (op-art). The slider drives the
+// circle radius through map 0..100 -> 20..90. Text at the bottom is mirrored.
+export const DEMO4 = {
+  nodes: [
+    { id: 1,  text: 'comment DEMO.4 // tile + mirror + blend + map', x: 60,  y: 40,  state: {} },
+    { id: 2,  text: 'loadbang',                                      x: 60,  y: 100, state: {} },
+    { id: 3,  text: 'hslider 0 100',                                 x: 60,  y: 180, state: { value: 50 } },
+    { id: 4,  text: 'map 0 100 20 90',                               x: 60,  y: 280, state: {} },
+    { id: 5,  text: 'number',                                        x: 60,  y: 370, state: {} },
+    { id: 6,  text: 'comment slider → map → circle radius',          x: 60,  y: 460, state: {} },
+    { id: 7,  text: 'polygon 100 100 60 3 180 #000000',              x: 300, y: 120, state: {} },
+    { id: 8,  text: 'tile 4 4 200 200',                              x: 300, y: 210, state: {} },
+    { id: 9,  text: 'circle 100 100 55 #ffffff',                     x: 300, y: 320, state: {} },
+    { id: 10, text: 'tile 4 4 200 200',                              x: 300, y: 410, state: {} },
+    { id: 11, text: 'blend difference',                              x: 300, y: 500, state: {} },
+    { id: 12, text: 'text PURE 250 720 70 #000000',                  x: 570, y: 120, state: {} },
+    { id: 13, text: 'mirror x 400',                                  x: 570, y: 210, state: {} },
+    { id: 14, text: 'bg #ffffff',                                    x: 570, y: 320, state: {} },
+    { id: 15, text: 'layer 1',                                       x: 100, y: 590, state: {} },
+    { id: 16, text: 'layer 2',                                       x: 260, y: 590, state: {} },
+    { id: 17, text: 'layer 3',                                       x: 420, y: 590, state: {} },
+    { id: 18, text: 'layer 4',                                       x: 580, y: 590, state: {} },
+    { id: 19, text: 'canvas 800 800',                                x: 300, y: 680, state: {} },
+  ],
+  conns: [
+    { id: 30, from: { node: 2,  port: 0 }, to: { node: 3,  port: 0 }, type: 'ctl' },
+    { id: 31, from: { node: 3,  port: 0 }, to: { node: 4,  port: 0 }, type: 'ctl' },
+    { id: 32, from: { node: 4,  port: 0 }, to: { node: 5,  port: 0 }, type: 'ctl' },
+    { id: 33, from: { node: 5,  port: 0 }, to: { node: 9,  port: 2 }, type: 'ctl' },
+    { id: 34, from: { node: 7,  port: 0 }, to: { node: 8,  port: 0 }, type: 'draw' },
+    { id: 35, from: { node: 8,  port: 0 }, to: { node: 16, port: 0 }, type: 'draw' },
+    { id: 36, from: { node: 9,  port: 0 }, to: { node: 10, port: 0 }, type: 'draw' },
+    { id: 37, from: { node: 10, port: 0 }, to: { node: 11, port: 0 }, type: 'draw' },
+    { id: 38, from: { node: 11, port: 0 }, to: { node: 17, port: 0 }, type: 'draw' },
+    { id: 39, from: { node: 12, port: 0 }, to: { node: 13, port: 0 }, type: 'draw' },
+    { id: 40, from: { node: 13, port: 0 }, to: { node: 18, port: 0 }, type: 'draw' },
+    { id: 41, from: { node: 14, port: 0 }, to: { node: 15, port: 0 }, type: 'draw' },
+    { id: 42, from: { node: 15, port: 0 }, to: { node: 19, port: 0 }, type: 'draw' },
+    { id: 43, from: { node: 16, port: 0 }, to: { node: 19, port: 0 }, type: 'draw' },
+    { id: 44, from: { node: 17, port: 0 }, to: { node: 19, port: 0 }, type: 'draw' },
+    { id: 45, from: { node: 18, port: 0 }, to: { node: 19, port: 0 }, type: 'draw' },
+  ],
+};
