@@ -1211,6 +1211,90 @@ function duplicateSelection() {
   change();
 }
 
+// ---------------------------------------------------------------- copy / paste
+
+const CLIP_FORMAT = 'puredraw.clip';
+let clipFallback = null; // in-memory buffer when the system clipboard is unavailable
+let pasteSeq = 0;        // consecutive pastes fan out by one grid step each
+
+function serializeSelection() {
+  const ids = [...selectedNodes].filter(id => graph.nodes.has(id));
+  if (!ids.length) return null;
+  const idSet = new Set(ids);
+  const nodes = ids.map(id => {
+    const n = graph.nodes.get(id);
+    return { id: n.id, text: n.text, x: n.x, y: n.y, state: n.state };
+  });
+  const conns = graph.conns
+    .filter(c => idSet.has(c.from.node) && idSet.has(c.to.node))
+    .map(c => ({ from: c.from, to: c.to, type: c.type }));
+  return { format: CLIP_FORMAT, version: 1, nodes, conns };
+}
+
+function copySelection() {
+  const data = serializeSelection();
+  if (!data) return;
+  const text = JSON.stringify(data);
+  clipFallback = text;
+  pasteSeq = 0;
+  navigator.clipboard?.writeText(text).catch(() => { /* fallback buffer already set */ });
+  flashStatus(`COPIED.${data.nodes.length}`);
+}
+
+function cutSelection() {
+  if (!selectedNodes.size) return;
+  copySelection();
+  deleteSelection();
+}
+
+async function pasteClipboard() {
+  let text = null;
+  try { text = await navigator.clipboard.readText(); } catch { /* e.g. Firefox denies read */ }
+  if (!text || !text.includes(CLIP_FORMAT)) text = clipFallback;
+  if (!text) return;
+  let data;
+  try { data = JSON.parse(text); } catch { return; }
+  if (data?.format !== CLIP_FORMAT || !Array.isArray(data.nodes) || !data.nodes.length) return;
+
+  pushHistory();
+  pasteSeq++;
+  const off = GRID * pasteSeq;
+  const idMap = new Map();
+  for (const src of data.nodes) {
+    const node = {
+      id: nextId++,
+      text: String(src.text ?? ''),
+      ...parseText(String(src.text ?? '')),
+      x: Math.max(0, snapPos((+src.x || 0) + off)),
+      y: Math.max(0, snapPos((+src.y || 0) + off)),
+      state: cloneNodeState(src.state),
+    };
+    graph.nodes.set(node.id, node);
+    buildNodeEl(node);
+    idMap.set(src.id, node.id);
+  }
+  if (Array.isArray(data.conns)) {
+    for (const c of data.conns) {
+      const from = idMap.get(c?.from?.node), to = idMap.get(c?.to?.node);
+      if (from == null || to == null) continue;
+      graph.conns.push({
+        id: nextId++,
+        from: { node: from, port: c.from.port || 0 },
+        to: { node: to, port: c.to.port || 0 },
+        type: c.type === 'draw' ? 'draw' : 'ctl',
+      });
+    }
+  }
+  selectedNodes.clear();
+  selectedConns.clear();
+  for (const id of idMap.values()) selectedNodes.add(id);
+  updateSelectionVisuals();
+  relayoutAll();
+  syncMetros();
+  change();
+  flashStatus(`PASTED.${idMap.size}`);
+}
+
 function deleteSelection() {
   if (!selectedNodes.size && !selectedConns.size) return;
   pushHistory();
@@ -1479,6 +1563,9 @@ function bindGlobal() {
       e.preventDefault(); redo(); return;
     }
     if (mod && e.key === 'd') { e.preventDefault(); duplicateSelection(); return; }
+    if (mod && e.key === 'c') { e.preventDefault(); copySelection(); return; }
+    if (mod && e.key === 'x') { e.preventDefault(); cutSelection(); return; }
+    if (mod && e.key === 'v') { e.preventDefault(); pasteClipboard(); return; }
     if (mod && (e.key === '0' || e.key === '=')) { e.preventDefault(); resetView(); return; }
     if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelection(); }
     if (e.key === 'Escape') clearSelection();

@@ -16,6 +16,7 @@ import { DEMO12 } from './demo12.js';
 
 const RECENT_KEY = 'puredraw.recent.v1';
 const RECENT_MAX = 8;
+const THEME_KEY = 'puredraw.theme.v1';
 
 let recent = [];
 try { recent = JSON.parse(localStorage.getItem(RECENT_KEY)) || []; } catch { /* ignore */ }
@@ -35,7 +36,23 @@ document.addEventListener('gd-node-used', e => {
   if (activeTab === 'RECENT') renderAddList();
 });
 
+// light/dark theme — the <head> inline script applies the saved theme before first paint
+function initTheme() {
+  const btn = $('btn-theme');
+  const apply = t => {
+    document.documentElement.dataset.theme = t;
+    btn.textContent = t === 'light' ? 'DARK' : 'LIGHT'; // label = theme you switch to
+  };
+  apply(document.documentElement.dataset.theme || 'dark');
+  btn.addEventListener('click', () => {
+    const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+    apply(next);
+    localStorage.setItem(THEME_KEY, next);
+  });
+}
+
 export function initUI() {
+  initTheme();
   bindMenuButton($('mb-file'), $('dd-file'));
   bindMenuButton($('mb-add'), $('dd-add'));
   bindMenuButton($('mb-demos'), $('dd-demos'));
